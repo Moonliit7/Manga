@@ -136,4 +136,400 @@
           </div>
         </div>
 
-        <div id="chapter-list" class="grid grid-cols-1 md:grid-cols-2
+        <div id="chapter-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <!-- Chapters injected dynamically -->
+        </div>
+
+        <div id="chapter-loader" class="hidden py-8 text-center text-slate-400 text-sm">
+          Loading chapter list...
+        </div>
+      </div>
+    </section>
+
+    <!-- READER VIEW -->
+    <section id="reader-view" class="hidden space-y-6">
+      <!-- Reader Controls Header -->
+      <div class="sticky top-16 z-30 bg-dark-bg/95 backdrop-blur-md p-4 rounded-2xl border border-dark-border flex flex-wrap items-center justify-between gap-4">
+        <button onclick="showDetailsView()" class="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-brand-500 transition">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i> Chapter List
+        </button>
+
+        <div class="text-center">
+          <h3 id="reader-manga-title" class="font-bold text-sm sm:text-base text-slate-200">Manga Title</h3>
+          <p id="reader-chapter-title" class="text-xs text-brand-500">Chapter</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="prev-chapter-btn" onclick="navigateChapter(-1)" class="p-2 bg-dark-card hover:bg-slate-700 rounded-lg border border-dark-border disabled:opacity-40 transition">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <button id="next-chapter-btn" onclick="navigateChapter(1)" class="p-2 bg-dark-card hover:bg-slate-700 rounded-lg border border-dark-border disabled:opacity-40 transition">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Reader Pages Stream -->
+      <div id="reader-pages-container" class="max-w-3xl mx-auto space-y-2">
+        <!-- Pages injected dynamically -->
+      </div>
+
+      <div id="reader-loader" class="py-20 text-center flex flex-col items-center gap-3">
+        <div class="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-slate-400 text-sm">Loading chapter pages...</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- BOOKMARKS MODAL -->
+  <div id="bookmarks-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-card w-full max-w-lg rounded-2xl border border-dark-border p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-dark-border pb-3">
+        <h3 class="text-lg font-bold flex items-center gap-2 text-slate-100">
+          <i data-lucide="bookmark" class="w-5 h-5 text-brand-500"></i> Bookmarks
+        </h3>
+        <button onclick="toggleBookmarksModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      
+      <div id="bookmarks-list" class="max-h-80 overflow-y-auto space-y-2 pr-1">
+        <!-- Bookmarked items injected here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION LOGIC -->
+  <script>
+    // App State
+    let currentManga = null;
+    let currentChapterList = [];
+    let currentChapterIndex = -1;
+    let selectedLang = 'en';
+    let bookmarks = JSON.parse(localStorage.getItem('manga_bookmarks') || '[]');
+
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // On Load: Fetch Trending / Popular Manga
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchMangaCatalog();
+    });
+
+    // Proxy API helper function
+    async function apiFetch(action, params = {}) {
+      const urlParams = new URLSearchParams({ action, ...params });
+      const response = await fetch(`/api/mangadexProxy?${urlParams.toString()}`);
+      if (!response.ok) throw new Error('Proxy request failed');
+      return await response.json();
+    }
+
+    // Fetch Manga Feed
+    async function fetchMangaCatalog(query = '') {
+      const grid = document.getElementById('manga-grid');
+      const loader = document.getElementById('grid-loader');
+      const title = document.getElementById('catalog-title');
+      const count = document.getElementById('result-count');
+
+      grid.innerHTML = '';
+      loader.classList.remove('hidden');
+
+      if (query) {
+        title.innerHTML = `<i data-lucide="search" class="w-6 h-6 text-brand-500"></i> Search Results: "${query}"`;
+      } else {
+        title.innerHTML = `<i data-lucide="flame" class="w-6 h-6 text-brand-500"></i> Popular Manga`;
+      }
+      lucide.createIcons();
+
+      try {
+        const data = await apiFetch('search', { query });
+        loader.classList.add('hidden');
+
+        if (!data || !data.data || data.data.length === 0) {
+          grid.innerHTML = `<p class="col-span-full text-center py-12 text-slate-400">No manga found.</p>`;
+          count.innerText = '0 results';
+          return;
+        }
+
+        count.innerText = `${data.data.length} titles found`;
+
+        data.data.forEach(manga => {
+          const coverUrl = getCoverUrl(manga);
+          const titleText = manga.attributes.title.en || Object.values(manga.attributes.title)[0] || 'Untitled';
+          
+          const card = document.createElement('div');
+          card.className = 'group relative bg-dark-card rounded-xl overflow-hidden border border-dark-border hover:border-brand-500 transition cursor-pointer flex flex-col';
+          card.onclick = () => openMangaDetails(manga);
+
+          card.innerHTML = `
+            <div class="aspect-[2/3] w-full overflow-hidden bg-slate-800 relative">
+              <img src="${coverUrl}" alt="${titleText}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy">
+            </div>
+            <div class="p-3 flex-1 flex flex-col justify-between">
+              <h3 class="text-sm font-semibold text-slate-200 line-clamp-2 group-hover:text-brand-500 transition">${titleText}</h3>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+
+      </div> catch (err) {
+        console.error('Error fetching catalog:', err);
+        loader.classList.add('hidden');
+        grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Failed to load manga. Please try again later.</p>`;
+      }
+    }
+
+    // Helper: Extract Cover Image URL
+    function getCoverUrl(manga) {
+      const mangaId = manga.id;
+      const coverRel = manga.relationships?.find(r => r.type === 'cover_art');
+      if (coverRel && coverRel.attributes && coverRel.attributes.fileName) {
+        return `https://uploads.mangadex.org/covers/${mangaId}/${coverRel.attributes.fileName}.256.jpg`;
+      }
+      return 'https://via.placeholder.com/256x384?text=No+Cover';
+    }
+
+    // Search Trigger Functions
+    function handleSearchKeyup(e) {
+      if (e.key === 'Enter') triggerSearch();
+    }
+
+    function triggerSearch() {
+      const query = document.getElementById('search-input').value.trim();
+      showHomeView();
+      fetchMangaCatalog(query);
+    }
+
+    // View Switching
+    function showHomeView() {
+      document.getElementById('home-view').classList.remove('hidden');
+      document.getElementById('details-view').classList.add('hidden');
+      document.getElementById('reader-view').classList.add('hidden');
+    }
+
+    function showDetailsView() {
+      document.getElementById('home-view').classList.add('hidden');
+      document.getElementById('details-view').classList.remove('hidden');
+      document.getElementById('reader-view').classList.add('hidden');
+    }
+
+    function showReaderView() {
+      document.getElementById('home-view').classList.add('hidden');
+      document.getElementById('details-view').classList.add('hidden');
+      document.getElementById('reader-view').classList.remove('hidden');
+      window.scrollTo(0, 0);
+    }
+
+    // Open Details
+    async function openMangaDetails(manga) {
+      currentManga = manga;
+      showDetailsView();
+
+      const container = document.getElementById('manga-details-container');
+      const coverUrl = getCoverUrl(manga);
+      const titleText = manga.attributes.title.en || Object.values(manga.attributes.title)[0] || 'Untitled';
+      const description = manga.attributes.description?.en || 'No description available.';
+      const status = manga.attributes.status || 'Unknown';
+      const year = manga.attributes.year || 'N/A';
+
+      const isBookmarked = bookmarks.some(b => b.id === manga.id);
+
+      container.innerHTML = `
+        <div class="flex flex-col md:flex-row gap-6">
+          <img src="${coverUrl}" alt="${titleText}" class="w-48 h-72 object-cover rounded-xl border border-dark-border mx-auto md:mx-0">
+          <div class="flex-1 space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h1 class="text-2xl font-bold text-white">${titleText}</h1>
+                <p class="text-xs text-slate-400 mt-1">Status: <span class="capitalize text-brand-500">${status}</span> • Published: ${year}</p>
+              </div>
+              <button onclick="toggleBookmark('${manga.id}', '${titleText.replace(/'/g, "\\'")}', '${coverUrl}')" id="bookmark-btn" class="flex items-center gap-2 text-sm px-4 py-2 rounded-xl border ${isBookmarked ? 'bg-brand-500 text-white border-brand-500' : 'bg-dark-bg text-slate-300 border-dark-border'} hover:opacity-90 transition">
+                <i data-lucide="bookmark" class="w-4 h-4"></i>
+                <span>${isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
+              </button>
+            </div>
+            <p class="text-sm text-slate-300 line-clamp-6 leading-relaxed">${description}</p>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+
+      // Load Chapters
+      fetchChapters();
+    }
+
+    // Fetch Chapters
+    async function fetchChapters() {
+      if (!currentManga) return;
+      const listContainer = document.getElementById('chapter-list');
+      const loader = document.getElementById('chapter-loader');
+
+      listContainer.innerHTML = '';
+      loader.classList.remove('hidden');
+
+      try {
+        const data = await apiFetch('chapters', { 
+          mangaId: currentManga.id, 
+          lang: selectedLang 
+        });
+        
+        loader.classList.add('hidden');
+
+        if (!data || !data.data || data.data.length === 0) {
+          listContainer.innerHTML = `<p class="col-span-full py-8 text-center text-slate-400 text-sm">No chapters available in this language.</p>`;
+          return;
+        }
+
+        currentChapterList = data.data;
+
+        currentChapterList.forEach((chap, idx) => {
+          const num = chap.attributes.chapter || 'Extra';
+          const title = chap.attributes.title || '';
+          
+          const btn = document.createElement('button');
+          btn.className = 'flex items-center justify-between p-3 bg-dark-bg hover:bg-slate-800 rounded-xl border border-dark-border text-left transition';
+          btn.onclick = () => openChapter(idx);
+
+          btn.innerHTML = `
+            <div>
+              <p class="text-sm font-semibold text-slate-200">Chapter ${num}</p>
+              ${title ? `<p class="text-xs text-slate-400 truncate max-w-[200px]">${title}</p>` : ''}
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i>
+          `;
+          listContainer.appendChild(btn);
+        });
+
+        lucide.createIcons();
+
+      } catch (err) {
+        console.error('Error fetching chapters:', err);
+        loader.classList.add('hidden');
+        listContainer.innerHTML = `<p class="col-span-full py-8 text-center text-red-400 text-sm">Failed to load chapters.</p>`;
+      }
+    }
+
+    function changeLanguage() {
+      selectedLang = document.getElementById('lang-select').value;
+      fetchChapters();
+    }
+
+    // Open Reader Chapter
+    async function openChapter(index) {
+      if (index < 0 || index >= currentChapterList.length) return;
+      currentChapterIndex = index;
+      const chapter = currentChapterList[index];
+
+      showReaderView();
+
+      const mangaTitle = currentManga.attributes.title.en || Object.values(currentManga.attributes.title)[0] || 'Manga';
+      const chapNum = chapter.attributes.chapter || '';
+      
+      document.getElementById('reader-manga-title').innerText = mangaTitle;
+      document.getElementById('reader-chapter-title').innerText = `Chapter ${chapNum}`;
+
+      document.getElementById('prev-chapter-btn').disabled = currentChapterIndex >= currentChapterList.length - 1;
+      document.getElementById('next-chapter-btn').disabled = currentChapterIndex <= 0;
+
+      const pagesContainer = document.getElementById('reader-pages-container');
+      const loader = document.getElementById('reader-loader');
+
+      pagesContainer.innerHTML = '';
+      loader.classList.remove('hidden');
+
+      try {
+        const data = await apiFetch('pages', { chapterId: chapter.id });
+        loader.classList.add('hidden');
+
+        const baseUrl = data.baseUrl;
+        const hash = data.chapter.hash;
+        const pageFiles = data.chapter.data;
+
+        pageFiles.forEach((file) => {
+          const imgUrl = `${baseUrl}/data/${hash}/${file}`;
+          const img = document.createElement('img');
+          img.src = imgUrl;
+          img.className = 'w-full h-auto rounded-md shadow-md border border-dark-border';
+          img.loading = 'lazy';
+          pagesContainer.appendChild(img);
+        });
+
+      } catch (err) {
+        console.error('Error loading pages:', err);
+        loader.classList.add('hidden');
+        pagesContainer.innerHTML = `<p class="py-12 text-center text-red-400">Failed to load chapter pages.</p>`;
+      }
+    }
+
+    function navigateChapter(direction) {
+      // Directions: -1 = newer/next chapter in list order, +1 = older/prev
+      openChapter(currentChapterIndex - direction);
+    }
+
+    // Bookmarking logic
+    function toggleBookmark(id, title, cover) {
+      const idx = bookmarks.findIndex(b => b.id === id);
+      if (idx > -1) {
+        bookmarks.splice(idx, 1);
+      } else {
+        bookmarks.push({ id, title, cover });
+      }
+      localStorage.setItem('manga_bookmarks', JSON.stringify(bookmarks));
+      
+      // Update UI if in details view
+      if (currentManga && currentManga.id === id) {
+        openMangaDetails(currentManga);
+      }
+      renderBookmarks();
+    }
+
+    function toggleBookmarksModal() {
+      const modal = document.getElementById('bookmarks-modal');
+      modal.classList.toggle('hidden');
+      if (!modal.classList.contains('hidden')) {
+        renderBookmarks();
+      }
+    }
+
+    function renderBookmarks() {
+      const list = document.getElementById('bookmarks-list');
+      list.innerHTML = '';
+
+      if (bookmarks.length === 0) {
+        list.innerHTML = `<p class="py-6 text-center text-slate-400 text-sm">No bookmarked manga yet.</p>`;
+        return;
+      }
+
+      bookmarks.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between p-2 bg-dark-bg hover:bg-slate-800 rounded-xl border border-dark-border transition';
+        div.innerHTML = `
+          <div class="flex items-center gap-3 cursor-pointer overflow-hidden" onclick="loadBookmarkedManga('${item.id}')">
+            <img src="${item.cover}" class="w-10 h-14 object-cover rounded-md flex-shrink-0">
+            <span class="text-sm font-semibold text-slate-200 truncate">${item.title}</span>
+          </div>
+          <button onclick="toggleBookmark('${item.id}', '', '')" class="text-slate-400 hover:text-red-400 p-2">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        `;
+        list.appendChild(div);
+      });
+      lucide.createIcons();
+    }
+
+    async function loadBookmarkedManga(mangaId) {
+      toggleBookmarksModal();
+      try {
+        const response = await fetch(`https://api.mangadex.org/manga/${mangaId}?includes[]=cover_art`);
+        const data = await response.json();
+        if (data && data.data) {
+          openMangaDetails(data.data);
+        }
+      } catch (err) {
+        console.error('Error fetching bookmarked manga:', err);
+      }
+    }
+  </script>
+</body>
+</html>
