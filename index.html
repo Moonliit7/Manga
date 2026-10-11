@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MangaVerse - Online Manga Reader</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              900: '#14532d',
+            },
+            dark: {
+              bg: '#0f172a',
+              card: '#1e293b',
+              border: '#334155',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar for manga reader */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #22c55e;
+    }
+  </style>
+</head>
+<body class="bg-dark-bg text-slate-100 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="sticky top-0 z-40 bg-dark-bg/90 backdrop-blur-md border-b border-dark-border">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Logo -->
+      <a href="#" onclick="showHomeView()" class="flex items-center gap-2 text-xl font-bold tracking-wider text-brand-500 hover:opacity-90 transition">
+        <i data-lucide="book-open" class="w-7 h-7"></i>
+        <span>Manga<span class="text-white">Verse</span></span>
+      </a>
+
+      <!-- Search Bar -->
+      <div class="flex-1 max-w-md relative">
+        <input 
+          type="text" 
+          id="search-input"
+          placeholder="Search manga by title..." 
+          class="w-full bg-dark-card text-sm text-slate-200 placeholder-slate-400 pl-10 pr-10 py-2 rounded-xl border border-dark-border focus:outline-none focus:border-brand-500 transition"
+          onkeyup="handleSearchKeyup(event)"
+        >
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+        <button onclick="triggerSearch()" class="absolute right-2 top-1.5 p-1 text-slate-400 hover:text-brand-500 transition">
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-3">
+        <button onclick="toggleBookmarksModal()" class="flex items-center gap-2 text-sm bg-dark-card hover:bg-slate-700 px-3 py-2 rounded-xl border border-dark-border transition">
+          <i data-lucide="bookmark" class="w-4 h-4 text-brand-500"></i>
+          <span class="hidden sm:inline">Bookmarks</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- HOME / CATALOG VIEW -->
+    <section id="home-view" class="space-y-6">
+      <div class="flex items-center justify-between border-b border-dark-border pb-4">
+        <h1 id="catalog-title" class="text-2xl font-bold flex items-center gap-2">
+          <i data-lucide="flame" class="w-6 h-6 text-brand-500"></i> Popular Manga
+        </h1>
+        <span id="result-count" class="text-xs text-slate-400">Loading titles...</span>
+      </div>
+
+      <!-- Manga Cards Grid -->
+      <div id="manga-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
+        <!-- Cards injected dynamically -->
+      </div>
+
+      <!-- Loader Indicator -->
+      <div id="grid-loader" class="flex flex-col items-center justify-center py-16 gap-3">
+        <div class="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-slate-400 text-sm">Fetching titles from MangaDex...</p>
+      </div>
+    </section>
+
+    <!-- MANGA DETAILS VIEW -->
+    <section id="details-view" class="hidden space-y-8">
+      <button onclick="showHomeView()" class="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-brand-500 transition">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Catalog
+      </button>
+
+      <div id="manga-details-container" class="bg-dark-card rounded-2xl p-6 border border-dark-border shadow-xl">
+        <!-- Details injected dynamically -->
+      </div>
+
+      <!-- Chapter Feed -->
+      <div class="space-y-4">
+        <div class="flex items-center justify-between border-b border-dark-border pb-3">
+          <h2 class="text-xl font-bold flex items-center gap-2">
+            <i data-lucide="list" class="w-5 h-5 text-brand-500"></i> Chapters
+          </h2>
+          <!-- Language Selector -->
+          <div class="flex items-center gap-2 text-sm text-slate-400">
+            <span>Language:</span>
+            <select id="lang-select" onchange="changeLanguage()" class="bg-dark-bg border border-dark-border text-slate-200 px-2 py-1 rounded-lg focus:outline-none focus:border-brand-500">
+              <option value="en" selected>English</option>
+              <option value="it">Italian</option>
+              <option value="es">Spanish</option>
+              <option value="ja">Japanese</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="chapter-list" class="grid grid-cols-1 md:grid-cols-2

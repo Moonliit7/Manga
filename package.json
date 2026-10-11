@@ -1,0 +1,9 @@
+{
+  "name": "manga-reader-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'No build step needed'"
+  }
+}
