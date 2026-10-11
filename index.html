@@ -217,13 +217,26 @@
       fetchMangaCatalog();
     });
 
-    // Proxy API helper function
-    async function apiFetch(action, params = {}) {
-      const urlParams = new URLSearchParams({ action, ...params });
-      const response = await fetch(`/api/mangadexProxy?${urlParams.toString()}`);
-      if (!response.ok) throw new Error('Proxy request failed');
-      return await response.json();
-    }
+    // Quick public proxy helper (no backend required)
+async function apiFetch(action, params = {}) {
+  let targetUrl = '';
+  if (action === 'search') {
+    targetUrl = `https://api.mangadex.org/manga?includes[]=cover_art&order[followedCount]=desc&limit=20`;
+    if (params.query) targetUrl += `&title=${encodeURIComponent(params.query)}`;
+  } else if (action === 'chapters') {
+    targetUrl = `https://api.mangadex.org/manga/${params.mangaId}/feed?translatedLanguage[]=${params.lang || 'en'}&order[chapter]=desc&limit=100`;
+  } else if (action === 'pages') {
+    targetUrl = `https://api.mangadex.org/at-home/server/${params.chapterId}`;
+  }
+
+  // Uses a public CORS bypass so it loads instantly in your browser
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+  
+  const response = await fetch(proxyUrl);
+  if (!response.ok) throw new Error('Proxy request failed');
+  const jsonWrapper = await response.json();
+  return JSON.parse(jsonWrapper.contents);
+}
 
     // Fetch Manga Feed
     async function fetchMangaCatalog(query = '') {
